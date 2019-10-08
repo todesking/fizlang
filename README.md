@@ -1,3 +1,3 @@
-# Fizlang: Just a toy language that can do fizzbuzz
+# Fizlang: Just a toy language that can do FizzBuzz
 
-Run `sbt run` to some demo.
+Run `sbt run` to FizzBuzz demo.
