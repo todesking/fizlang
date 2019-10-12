@@ -7,7 +7,7 @@ object Interpreter {
   class Error(msg: String) extends RuntimeException(msg)
 
   case class FunData(param: String, body: Expr, var env: Env)
-  case class Instinct(name: String, f: Any => Any)
+  case class Intrinsic(name: String, f: Any => Any)
 
   val defaultEnv = Seq(
     "println" -> { x: Any =>
@@ -23,11 +23,11 @@ object Interpreter {
       x.asInstanceOf[Char].toString
     },
     "string_concat" -> { x: Any =>
-      Instinct("string_concat_1", { y: Any =>
+      Intrinsic("string_concat_1", { y: Any =>
         x.asInstanceOf[String] + y.asInstanceOf[String]
       })
     }
-  ).map { case (k, v) => k -> Instinct(k, v) }.toMap ++ Map(
+  ).map { case (k, v) => k -> Intrinsic(k, v) }.toMap ++ Map(
     "true" -> true,
     "false" -> false,
     "unit" -> ()
@@ -95,7 +95,7 @@ object Interpreter {
       fun match {
         case FunData(param, body, env) =>
           eval(body, env + (param -> arg))
-        case Instinct(_, f) =>
+        case Intrinsic(_, f) =>
           f(arg)
       }
     case E.Fun(param, body) =>
