@@ -1,13 +1,14 @@
 package com.todesking.fizlang
 
 object Interpreter {
-  var debug: Boolean = false
-  val E = Expr
   type Env = Map[String, Any]
-  class Error(msg: String) extends RuntimeException(msg)
 
-  case class FunData(param: String, body: Expr, var env: Env)
+  case class FunData(param: String, body: Expr, var env: Env) {
+    override def toString = s"FunData($param, $body, ...)"
+  }
   case class Intrinsic(name: String, f: Any => Any)
+
+  class Error(msg: String) extends RuntimeException(msg)
 
   val defaultEnv = Seq(
     "println" -> { x: Any =>
@@ -32,6 +33,16 @@ object Interpreter {
     "false" -> false,
     "unit" -> ()
   )
+
+}
+
+object NaiveInterpreter {
+  import Interpreter._
+
+  val E = Expr
+  type Env = Map[String, Any]
+
+  var debug: Boolean = false
 
   def runExpr(src: String, env: Env = defaultEnv): Any = {
     Parser.parseExpr(src) match {
@@ -144,6 +155,123 @@ object Interpreter {
     }
   def evalFun(expr: Expr, env: Env = defaultEnv): FunData =
     eval(expr, env) match {
+      case f: FunData => f
+      case unk        => throw typeError("fun", unk, expr)
+    }
+}
+
+object TrampolineInterpreter {
+  import Interpreter._
+  import Trampoline.Done
+
+  val E = Expr
+
+  def runExpr(src: String, env: Env = defaultEnv): Any = {
+    Parser.parseExpr(src) match {
+      case Left(msg)   => throw new Error("Parse error: " + msg)
+      case Right(expr) => eval(expr, env).runT
+    }
+  }
+  def runScript(src: String, env: Env = defaultEnv): Env =
+    Parser.parseToplevel(src) match {
+      case Left(msg) => throw new Error(s"Parse error: $msg")
+      case Right(xs) =>
+        val finalEnv =
+          xs.foldLeft(env) {
+            case (env, (name, rec, expr)) =>
+              val v = eval(expr, env).runT
+              env + (name -> v)
+          }
+        xs.filter(_._2)
+          .foreach {
+            case (name, rec, expr) =>
+              finalEnv(name).asInstanceOf[FunData].env = finalEnv
+          }
+        finalEnv
+    }
+  def runMain(src: String, env: Env = defaultEnv): Any = {
+    val e = runScript(src, env)
+    val main = evalFun(E.Ref("main"), e).runT
+    eval(main.body, e + (main.param -> ())).runT
+  }
+
+  private[this] def intOp[A](l: Expr, r: Expr, env: Env)(
+      f: (Int, Int) => A
+  ): Trampoline[A] =
+    for { lv <- evalInt(l, env); rv <- evalInt(r, env) } yield f(lv, rv)
+
+  def eval(expr: Expr, env: Env = defaultEnv): Trampoline[Any] = expr match {
+    case E.Lit(value)     => Done(value)
+    case E.IntPlus(l, r)  => intOp(l, r, env)(_ + _)
+    case E.IntMinus(l, r) => intOp(l, r, env)(_ - _)
+    case E.IntMul(l, r)   => intOp(l, r, env)(_ * _)
+    case E.IntDiv(l, r)   => intOp(l, r, env)(_ / _)
+    case E.IntMod(l, r)   => intOp(l, r, env)(_ % _)
+    case E.Eq(l, r) =>
+      intOp(l, r, env)(_ == _)
+    case E.Gt(l, r) => intOp(l, r, env)(_ > _)
+    case E.Ge(l, r) => intOp(l, r, env)(_ >= _)
+    case E.Le(l, r) => intOp(l, r, env)(_ <= _)
+    case E.Lt(l, r) => intOp(l, r, env)(_ < _)
+    case E.Not(expr) =>
+      evalBool(expr, env).map(!_)
+    case E.If(cond, th, el) =>
+      evalBool(cond, env).flatMap { c =>
+        if (c) eval(th, env)
+        else eval(el, env)
+      }
+    case E.App(f, a) =>
+      for {
+        fun <- eval(f, env)
+        arg <- eval(a, env)
+        value <- fun match {
+          case FunData(param, body, env) =>
+            eval(body, env + (param -> arg))
+          case Intrinsic(_, f) =>
+            Done(f(arg))
+        }
+      } yield value
+    case E.Fun(param, body) =>
+      Done(FunData(param, body, env))
+    case E.Ref(name) =>
+      Done(env.get(name).getOrElse {
+        throw new Error(s"Name not found: $name")
+      })
+    case E.Block(body) =>
+      body.foldLeft(Done(()): Trampoline[Any]) {
+        case (x, expr) =>
+          x.flatMap { _ =>
+            eval(expr, env)
+          }
+      }
+    case E.LetRec(defs, body) =>
+      val funs = defs.map {
+        case (name, fun) =>
+          name -> FunData(fun.param, fun.body, null)
+      }
+      val newEnv = env ++ funs
+      funs.foreach {
+        case (k, fun) =>
+          fun.env = newEnv
+      }
+      eval(body, newEnv)
+  }
+  private[this] def typeError(expected: String, value: Any, expr: Expr) = {
+    val tpe = if (value == null) "null" else value.getClass
+    new Error(s"Expected $expected: $value: ${tpe}, location: $expr")
+  }
+  def evalInt(expr: Expr, env: Env = defaultEnv): Trampoline[Int] =
+    eval(expr, env).map {
+      case x: Int => x
+      case unk    => throw typeError("int", unk, expr)
+    }
+  def evalBool(expr: Expr, env: Env = defaultEnv): Trampoline[Boolean] =
+    eval(expr, env).map {
+      case x: Boolean => x
+      case unk        => throw typeError("bool", unk, expr)
+    }
+  def evalFun(expr: Expr, env: Env = defaultEnv): Trampoline[FunData] =
+    eval(expr, env).map {
       case f: FunData => f
       case unk        => throw typeError("fun", unk, expr)
     }

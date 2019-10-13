@@ -1,12 +1,23 @@
 import org.scalatest.FunSpec
-import com.todesking.fizlang.Interpreter
+import com.todesking.fizlang.TrampolineInterpreter
+import com.todesking.fizlang.NaiveInterpreter
 class TestMain extends FunSpec {
-  private[this] def test(src: String, expected: Any) = {
+  private[this] def test(
+      src: String,
+      expected: Any,
+      trampolineOnly: Boolean = false
+  ) = {
     val desc =
       src.replaceAll("\\s+", " ").replaceAll("\n", " ").take(20)
     describe(s"Expr $desc") {
-      it(s"should be $expected") {
-        val actual = Interpreter.runExpr(src)
+      if (!trampolineOnly) {
+        it(s"should evaluate to $expected by NaiveInterpreter") {
+          val actual = NaiveInterpreter.runExpr(src)
+          assert(actual == expected)
+        }
+      }
+      it(s"should evaluate to $expected by TrampolineInterpreter") {
+        val actual = TrampolineInterpreter.runExpr(src)
         assert(actual == expected)
       }
     }
@@ -33,6 +44,13 @@ class TestMain extends FunSpec {
   test("unit", ())
   test("let x = 10 in let y = 20 in let x = 3 in x + y", 23)
   test("let div x y = x / y in div 10 3", 3)
+  test("let rec f x = g x; g x = x in f 123", 123)
+  test("let rec f x y = if x == 0 then y else f (x - 1) y in f 1 123", 123)
+  test(
+    "let rec sum from to  = if from == to then from else from + (sum (from + 1) to) in sum 1 1000",
+    500500,
+    true
+  )
 
   private[this] def testScript(src: String, expected: Any) = {
     val desc =
@@ -40,8 +58,12 @@ class TestMain extends FunSpec {
     describe(
       s"Script $desc..."
     ) {
-      it(s"should be $expected") {
-        val actual = Interpreter.runMain(src)
+      it(s"should evaluate to $expected by NaiveInterpreter") {
+        val actual = NaiveInterpreter.runMain(src)
+        assert(actual == expected)
+      }
+      it(s"should evaluate to $expected by TrampolineInterpreter") {
+        val actual = TrampolineInterpreter.runMain(src)
         assert(actual == expected)
       }
     }

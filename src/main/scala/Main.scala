@@ -4,7 +4,7 @@ object Main {
   def test(s: String, expected: Any): Unit = {
     println(s"> $s")
     val result = try {
-      val e = Interpreter.runExpr(s)
+      val e = NaiveInterpreter.runExpr(s)
       if (e == expected) e.toString
       else throw new AssertionError(s"[Unexpected] $e != $expected")
     } catch {
@@ -16,7 +16,7 @@ object Main {
   def testScript(s: String, expected: Any): Unit = {
     println(s"> $s")
     val result = try {
-      val e = Interpreter.runMain(s)
+      val e = NaiveInterpreter.runMain(s)
       if (e == expected) e.toString
       else throw new AssertionError(s"[Unexpected] $e != $expected")
     } catch {
