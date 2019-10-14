@@ -138,6 +138,23 @@ object NaiveInterpreter {
           fun.env = newEnv
       }
       eval(body, newEnv)
+    case E.Patmat(expr, clauses) =>
+      val v = eval(expr, env)
+      clauses
+        .find {
+          case (E.PLit(u), _) => u == v
+          case (E.PAny(_), _) => true
+        }
+        .fold {
+          throw new Error(s"Match error: value=$v")
+        } {
+          case (pat, body) =>
+            val newEnv = env ++ (pat match {
+              case E.PAny(name) => Map(name -> v)
+              case E.PLit(_)    => Map()
+            })
+            eval(body, newEnv)
+        }
   }
   private[this] def typeError(expected: String, value: Any, expr: Expr) = {
     val tpe = if (value == null) "null" else value.getClass
@@ -255,6 +272,24 @@ object TrampolineInterpreter {
           fun.env = newEnv
       }
       eval(body, newEnv)
+    case E.Patmat(expr, clauses) =>
+      eval(expr, env).flatMap { v =>
+        clauses
+          .find {
+            case (E.PLit(u), _) => u == v
+            case (E.PAny(_), _) => true
+          }
+          .fold {
+            throw new Error(s"Match error: value=$v")
+          } {
+            case (pat, body) =>
+              val newEnv = env ++ (pat match {
+                case E.PAny(name) => Map(name -> v)
+                case E.PLit(_)    => Map()
+              })
+              eval(body, newEnv)
+          }
+      }
   }
   private[this] def typeError(expected: String, value: Any, expr: Expr) = {
     val tpe = if (value == null) "null" else value.getClass

@@ -20,7 +20,8 @@ object Parser extends RegexParsers {
     "else",
     "let",
     "in",
-    "rec"
+    "rec",
+    "match"
   )
 
   val E = Expr
@@ -61,7 +62,7 @@ object Parser extends RegexParsers {
     }
   }
 
-  def expr: Parser[Expr] = fun | ifelse | guard | let | let_rec | expr1
+  def expr: Parser[Expr] = fun | ifelse | guard | patmat | let | let_rec | expr1
   def name = "[a-z][a-z_]*".r ^? { case n if !keywords.contains(n) => n }
   def fun = ("fun" ~> name) ~ ("=>" ~> expr) ^^ {
     case param ~ body => E.Fun(param, body)
@@ -77,6 +78,16 @@ object Parser extends RegexParsers {
             E.If(cond, body, rest)
         }
     }
+  def patmat =
+    ("match" ~> expr) ~ ("|" ~> rep1sep((pat <~ "=>") ~ expr, "|")) ^^ {
+      case e ~ clauses =>
+        E.Patmat(e, clauses.map { case pat ~ body => (pat, body) })
+    }
+  def pat = pat_lit | pat_any
+  def pat_lit = lit ^^ { case E.Lit(v) => E.PLit(v) }
+  def pat_any = name ^^ { n =>
+    E.PAny(n)
+  }
   def let = ("let" ~> name) ~ name.* ~ ("=" ~> expr) ~ ("in" ~> expr) ^^ {
     case n ~ params ~ e ~ body =>
       val value = params.foldRight(e) {
@@ -102,7 +113,7 @@ object Parser extends RegexParsers {
         )
     }
 
-  def atom: Parser[Expr] = paren | block | lit_int | lit_str | lit_char | ref
+  def atom: Parser[Expr] = paren | block | lit | ref
   def expr1 =
     Seq(
       opSyntax("$") {
@@ -152,6 +163,7 @@ object Parser extends RegexParsers {
   def block = ("{" ~> rep1sep(expr, ";")) <~ "}" ^^ { body =>
     E.Block(body)
   }
+  def lit = lit_int | lit_str | lit_char
   def lit_int = "[0-9]+".r ^^ { x =>
     E.Lit(x.toInt)
   }

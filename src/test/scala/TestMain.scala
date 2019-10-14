@@ -51,6 +51,8 @@ class TestMain extends FunSpec {
     500500,
     true
   )
+  test("""match 123 | 123 => 456 | x => x + 1""", 456)
+  test("""match 456 | 123 => 456 | x => x + 1""", 457)
 
   private[this] def testScript(src: String, expected: Any) = {
     val desc =
