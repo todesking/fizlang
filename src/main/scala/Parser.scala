@@ -113,7 +113,7 @@ object Parser extends RegexParsers {
         )
     }
 
-  def atom: Parser[Expr] = paren | block | lit | ref
+  def atom: Parser[Expr] = paren | tuple | block | lit | ref
   def expr1 =
     Seq(
       opSyntax("$") {
@@ -159,6 +159,9 @@ object Parser extends RegexParsers {
       }
     ).foldRight(atom) { case (f, next) => f(next) }
 
+  def tuple = "(" ~> rep1sep(expr, ",") <~ ")" ^^ { es =>
+    E.Tuple(es)
+  }
   def paren = ("(" ~> expr) <~ ")"
   def block = ("{" ~> rep1sep(expr, ";")) <~ "}" ^^ { body =>
     E.Block(body)

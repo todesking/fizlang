@@ -19,6 +19,7 @@ object Expr {
   case class App(fun: Expr, arg: Expr) extends Expr
   case class Block(body: Seq[Expr]) extends Expr
   case class LetRec(defs: Seq[(String, Fun)], body: Expr) extends Expr
+  case class Tuple(elms: Seq[Expr]) extends Expr
   case class Patmat(expr: Expr, clauses: Seq[(Pat, Expr)]) extends Expr
 
   sealed abstract class Pat

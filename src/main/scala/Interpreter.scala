@@ -75,6 +75,12 @@ object NaiveInterpreter {
 
   def eval(expr: Expr, env: Env = defaultEnv): Any = expr match {
     case E.Lit(value) => value
+    case E.Tuple(es) =>
+      val vs = es.map { eval(_, env) }
+      vs match {
+        case Seq(v1, v2) => (v1, v2)
+        case _           => throw new Error(s"Tuple${vs.size} is not supported")
+      }
     case E.IntPlus(l, r) =>
       evalInt(l, env) + evalInt(r, env)
     case E.IntMinus(l, r) =>
@@ -218,7 +224,13 @@ object TrampolineInterpreter {
     for { lv <- evalInt(l, env); rv <- evalInt(r, env) } yield f(lv, rv)
 
   def eval(expr: Expr, env: Env = defaultEnv): Trampoline[Any] = expr match {
-    case E.Lit(value)     => Done(value)
+    case E.Lit(value) => Done(value)
+    case E.Tuple(es) =>
+      val vs = es.map { eval(_, env) }
+      vs match {
+        case Seq(v1, v2) => for { vv1 <- v1; vv2 <- v2 } yield (vv1, vv2)
+        case _           => throw new Error(s"Tuple${vs.size} is not supported")
+      }
     case E.IntPlus(l, r)  => intOp(l, r, env)(_ + _)
     case E.IntMinus(l, r) => intOp(l, r, env)(_ - _)
     case E.IntMul(l, r)   => intOp(l, r, env)(_ * _)
