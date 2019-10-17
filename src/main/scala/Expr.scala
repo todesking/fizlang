@@ -25,4 +25,5 @@ object Expr {
   sealed abstract class Pat
   case class PLit(value: Any) extends Pat
   case class PAny(name: String) extends Pat
+  case class PTuple(items: Seq[Pat]) extends Pat
 }

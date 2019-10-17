@@ -1,4 +1,5 @@
 package com.todesking.fizlang
+import scala.annotation.tailrec
 
 object Interpreter {
   type Env = Map[String, Any]
@@ -146,22 +147,44 @@ object NaiveInterpreter {
       eval(body, newEnv)
     case E.Patmat(expr, clauses) =>
       val v = eval(expr, env)
-      clauses
-        .find {
-          case (E.PLit(u), _) => u == v
-          case (E.PAny(_), _) => true
-        }
-        .fold {
-          throw new Error(s"Match error: value=$v")
-        } {
-          case (pat, body) =>
-            val newEnv = env ++ (pat match {
-              case E.PAny(name) => Map(name -> v)
-              case E.PLit(_)    => Map()
-            })
-            eval(body, newEnv)
-        }
+      val (binding, body) = patmat(v, clauses)
+      eval(body, env ++ binding)
   }
+  @tailrec
+  private[this] def patmat(
+      v: Any,
+      clauses: Seq[(E.Pat, Expr)]
+  ): (Map[String, Any], Expr) = {
+    clauses match {
+      case (p, e) :: xs =>
+        unapp(v, p) match {
+          case Some(binding) => binding -> e
+          case None          => patmat(v, xs)
+        }
+      case Nil =>
+        throw new Error(s"Match error: $v")
+    }
+  }
+  private[this] def unapp(v: Any, p: E.Pat): Option[Map[String, Any]] =
+    p match {
+      case E.PAny(name) => Some(Map(name -> v))
+      case E.PLit(u)    => if (u == v) Some(Map()) else None
+      case E.PTuple(ps) =>
+        v match {
+          case v: Product if v.productArity == ps.size =>
+            ps.zipWithIndex
+              .map {
+                case (p, i) =>
+                  unapp(v.productElement(i), p)
+              }
+              .foldLeft[Option[Map[String, Any]]](Some(Map())) {
+                case (Some(m1), Some(m2)) => Some(m1 ++ m2)
+                case (_, None)            => None
+                case (None, _)            => None
+              }
+          case _ => None
+        }
+    }
   private[this] def typeError(expected: String, value: Any, expr: Expr) = {
     val tpe = if (value == null) "null" else value.getClass
     new Error(s"Expected $expected: $value: ${tpe}, location: $expr")

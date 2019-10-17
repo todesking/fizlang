@@ -5,20 +5,23 @@ class TestMain extends FunSpec {
   private[this] def test(
       src: String,
       expected: Any,
-      trampolineOnly: Boolean = false
+      testNaive: Boolean = true,
+      testTrampoline: Boolean = true
   ) = {
     val desc =
       src.replaceAll("\\s+", " ").replaceAll("\n", " ").take(20)
     describe(s"Expr $desc") {
-      if (!trampolineOnly) {
+      if (testNaive) {
         it(s"should evaluate to $expected by NaiveInterpreter") {
           val actual = NaiveInterpreter.runExpr(src)
           assert(actual == expected)
         }
       }
-      it(s"should evaluate to $expected by TrampolineInterpreter") {
-        val actual = TrampolineInterpreter.runExpr(src)
-        assert(actual == expected)
+      if (testTrampoline) {
+        it(s"should evaluate to $expected by TrampolineInterpreter") {
+          val actual = TrampolineInterpreter.runExpr(src)
+          assert(actual == expected)
+        }
       }
     }
   }
@@ -49,11 +52,19 @@ class TestMain extends FunSpec {
   test(
     "let rec sum from to  = if from == to then from else from + (sum (from + 1) to) in sum 1 1000",
     500500,
-    true
+    testNaive = false,
+    testTrampoline = true
   )
   test("""match 123 | 123 => 456 | x => x + 1""", 456)
   test("""match 456 | 123 => 456 | x => x + 1""", 457)
   test("""(1, 2)""", (1, 2))
+  test("""match (1, 2) | (a, b) => a + b""", 3, testTrampoline = false)
+  test("""match (1, (2, 3)) | (1, (a, 3)) => a""", 2, testTrampoline = false)
+  test(
+    """match (10, (20, 30)) | (10, (a, 20)) => 1 | (10, (a, 30)) => 2""",
+    2,
+    testTrampoline = false
+  )
 
   private[this] def testScript(src: String, expected: Any) = {
     val desc =

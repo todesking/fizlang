@@ -83,7 +83,10 @@ object Parser extends RegexParsers {
       case e ~ clauses =>
         E.Patmat(e, clauses.map { case pat ~ body => (pat, body) })
     }
-  def pat = pat_lit | pat_any
+  def pat = pat_tuple | pat_lit | pat_any
+  def pat_tuple: Parser[E.Pat] = ("(" ~> rep1sep(pat, ",")) <~ ")" ^^ { xs =>
+    E.PTuple(xs)
+  }
   def pat_lit = lit ^^ { case E.Lit(v) => E.PLit(v) }
   def pat_any = name ^^ { n =>
     E.PAny(n)
